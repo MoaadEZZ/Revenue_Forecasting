@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>CAGR Analysis</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap');
+
+  :root {
+    --bg:        #0d0d0d;
+    --surface:   #141414;
+    --surface2:  #1a1a1a;
+    --border:    #2a2a2a;
+    --accent:    #ff8400;
+    --accent-dim:#ff840033;
+    --accent2:   #ffb347;
+    --text:      #f0f0f0;
+    --muted:     #666;
+    --danger:    #ff4444;
+    --pos:       #4caf82;
+    --neg:       #ff5252;
+    --forecast:  #a78bfa;   /* purple tint for future/predicted values */
+    --forecast-dim: rgba(167,139,250,0.12);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content:'';
+    position:fixed; inset:0;
+    background-image:
+      linear-gradient(rgba(255,132,0,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,132,0,0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events:none; z-index:0;
+  }
+
+  .container { position:relative; z-index:1; max-width:1340px; margin:0 auto; padding:40px 24px; }
+
+  header {
+    display:flex; align-items:flex-end; gap:16px;
+    margin-bottom:40px; padding-bottom:24px;
+    border-bottom:1px solid var(--border);
+    justify-content: space-between;
+  }
+  .header-left { display:flex; align-items:flex-end; gap:16px; }
+
+  .logo-mark {
+    width:44px; height:44px;
+    background: linear-gradient(135deg, var(--accent), #ff5500);
+    border-radius:10px;
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Syne',sans-serif; font-weight:800; font-size:18px; color:#000;
+    flex-shrink:0;
+  }
+
+  h1 { font-family:'Syne',sans-serif; font-weight:800; font-size:28px; letter-spacing:-0.5px; line-height:1; }
+  h1 span { color:var(--accent); }
+  .subtitle { font-size:11px; color:var(--muted); letter-spacing:2px; text-transform:uppercase; margin-bottom:4px; }
+
+  .nav-link {
+    font-family:'Syne',sans-serif; font-weight:700; font-size:11px;
+    letter-spacing:2px; text-transform:uppercase;
+    color:var(--muted); text-decoration:none;
+    border:1px solid var(--border); border-radius:8px;
+    padding:8px 14px; transition:all 0.2s;
+    display:flex; align-items:center; gap:6px;
+  }
+  .nav-link:hover { color:var(--accent); border-color:var(--accent); background:var(--accent-dim); }
+
+  /* ── Controls ── */
+  .controls {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:16px; padding:24px;
+    display:flex; align-items:flex-end; gap:20px; flex-wrap:wrap;
+    margin-bottom:28px;
+  }
+
+  .ctrl-group { display:flex; flex-direction:column; gap:7px; }
+  .ctrl-group label {
+    font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted);
+  }
+
+  /* Year select wrapper — shows forecast badge when a future year is chosen */
+  .year-wrap { position:relative; }
+
+  .year-badge {
+    position:absolute; top:-8px; right:-4px; z-index:2;
+    background:var(--forecast); color:#0d0d0d;
+    font-family:'Syne',sans-serif; font-weight:700;
+    font-size:9px; letter-spacing:1px; text-transform:uppercase;
+    padding:2px 6px; border-radius:4px;
+    display:none; pointer-events:none;
+  }
+
+  .year-select {
+    background:var(--bg); border:1px solid var(--border);
+    color:var(--text); font-family:'DM Mono',monospace; font-size:13px;
+    padding:10px 36px 10px 14px; border-radius:8px; outline:none;
+    transition:border-color 0.2s, box-shadow 0.2s, color 0.2s;
+    appearance:none; -webkit-appearance:none;
+    cursor:pointer; min-width:120px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23666'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+  }
+  .year-select:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
+  .year-select.is-forecast {
+    border-color:var(--forecast);
+    color:var(--forecast);
+    box-shadow:0 0 0 3px rgba(167,139,250,0.15);
+  }
+  .year-select option { background:#1a1a1a; color:var(--text); }
+  .year-select option.forecast-opt { color:var(--forecast); }
+
+  .arrow-sep { font-size:18px; color:var(--muted); padding-bottom:10px; flex-shrink:0; }
+
+  .btn {
+    padding:11px 28px;
+    background:linear-gradient(135deg, var(--accent), #cc6900);
+    border:none; border-radius:10px; color:#000;
+    font-family:'Syne',sans-serif; font-weight:700; font-size:12px;
+    letter-spacing:1.5px; text-transform:uppercase;
+    cursor:pointer; transition:opacity 0.2s, transform 0.1s;
+    position:relative; white-space:nowrap; display:flex; align-items:center; gap:8px;
+  }
+  .btn:hover { opacity:0.9; transform:translateY(-1px); }
+  .btn:active { transform:translateY(0); }
+  .btn:disabled { opacity:0.4; cursor:not-allowed; transform:none; }
+  .btn .spinner {
+    display:none; width:14px; height:14px;
+    border:2px solid rgba(0,0,0,0.3); border-top-color:#000;
+    border-radius:50%; animation:spin 0.6s linear infinite;
+  }
+  .btn.loading .btn-text { display:none; }
+  .btn.loading .spinner  { display:inline-block; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  /* Forecast notice in controls */
+  .forecast-notice {
+    display:none; align-self:flex-end;
+    background:var(--forecast-dim); border:1px solid rgba(167,139,250,0.3);
+    color:var(--forecast); border-radius:8px; padding:10px 14px;
+    font-size:11px; line-height:1.5; max-width:340px;
+  }
+  .forecast-notice.visible { display:block; }
+
+  .error-msg {
+    background:rgba(255,68,68,0.08); border:1px solid rgba(255,68,68,0.3);
+    color:var(--danger); border-radius:8px; padding:11px 15px;
+    font-size:12px; display:none; align-self:flex-end;
+  }
+
+  /* ── Summary KPI bar ── */
+  .summary-bar {
+    display:none;
+    grid-template-columns: repeat(auto-fit, minmax(180px,1fr));
+    gap:14px; margin-bottom:28px;
+  }
+  .kpi-card {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:12px; padding:16px 18px; position:relative; overflow:hidden;
+  }
+  .kpi-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:var(--accent); }
+  .kpi-card.forecast-card::before { background:var(--forecast); }
+  .kpi-label { font-size:10px; letter-spacing:1.2px; text-transform:uppercase; color:var(--muted); margin-bottom:6px; }
+  .kpi-value { font-family:'Syne',sans-serif; font-weight:700; font-size:20px; }
+  .kpi-value.forecast { color:var(--forecast); }
+
+  /* inline badge used in KPI labels */
+  .badge {
+    display:inline-block; font-size:8px; letter-spacing:1px; text-transform:uppercase;
+    font-family:'Syne',sans-serif; font-weight:700;
+    padding:2px 5px; border-radius:3px; margin-left:6px; vertical-align:middle;
+  }
+  .badge.pred { background:var(--forecast-dim); color:var(--forecast); border:1px solid rgba(167,139,250,0.3); }
+  .badge.real { background:rgba(255,255,255,0.06); color:#aaa; border:1px solid #2a2a2a; }
+
+  /* ── Results ── */
+  .results-area { display:none; }
+
+  .panel-title {
+    font-family:'Syne',sans-serif; font-weight:700; font-size:11px;
+    letter-spacing:2px; text-transform:uppercase; color:var(--muted);
+    margin-bottom:16px; display:flex; align-items:center; gap:8px;
+  }
+  .panel-title::before { content:''; width:3px; height:14px; background:var(--accent); border-radius:2px; }
+
+  /* SBL accordion */
+  .sbl-block {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:14px; margin-bottom:14px; overflow:hidden;
+  }
+  .sbl-header {
+    display:grid;
+    grid-template-columns: 1fr repeat(3, 160px) 40px;
+    align-items:center;
+    padding:16px 20px; cursor:pointer;
+    transition:background 0.15s; user-select:none;
+  }
+  .sbl-header:hover { background:rgba(255,132,0,0.04); }
+
+  .sbl-name { font-family:'Syne',sans-serif; font-weight:700; font-size:14px; }
+
+  .sbl-col { font-size:12px; text-align:right; padding:0 12px; }
+  .sbl-col-head { font-size:10px; letter-spacing:1px; text-transform:uppercase; color:var(--muted); margin-bottom:3px; }
+
+  .sbl-toggle {
+    width:28px; height:28px; border-radius:7px;
+    border:1px solid var(--border); background:var(--bg);
+    display:flex; align-items:center; justify-content:center;
+    font-size:11px; color:var(--muted); transition:all 0.2s; justify-self:end;
+  }
+  .sbl-block.open .sbl-toggle {
+    background:var(--accent-dim); border-color:var(--accent); color:var(--accent); transform:rotate(180deg);
+  }
+
+  .domain-table-wrap { display:none; border-top:1px solid var(--border); padding:0 20px 16px; }
+  .sbl-block.open .domain-table-wrap { display:block; }
+
+  .domain-table { width:100%; border-collapse:collapse; margin-top:12px; }
+  .domain-table th {
+    font-size:10px; letter-spacing:1.2px; text-transform:uppercase;
+    color:var(--muted); text-align:right; padding:6px 10px;
+    border-bottom:1px solid var(--border);
+  }
+  .domain-table th:first-child { text-align:left; }
+  .domain-table td {
+    font-size:12px; padding:9px 10px; text-align:right;
+    border-bottom:1px solid rgba(255,255,255,0.03);
+  }
+  .domain-table td:first-child { text-align:left; color:var(--text); }
+  .domain-table tr:last-child td { border-bottom:none; }
+  .domain-table tr:hover td { background:rgba(255,132,0,0.03); }
+
+  /* Clickable domain rows */
+  .domain-table tbody tr {
+    cursor: pointer;
+    transition: background 0.12s;
+  }
+  .domain-table tbody tr:hover td { background: rgba(255,132,0,0.08) !important; }
+  .domain-table tbody tr:hover td:first-child { color: var(--accent); }
+  .domain-drill-hint {
+    font-size: 9px; letter-spacing: 1px; text-transform: uppercase;
+    color: var(--muted); opacity: 0; transition: opacity 0.15s;
+    margin-left: 8px; vertical-align: middle;
+  }
+  .domain-table tbody tr:hover .domain-drill-hint { opacity: 1; }
+
+  /* Revenue values: predicted end-year column gets purple tint */
+  .rev-val      { color:#aaa; }
+  .rev-val.pred { color:var(--forecast); }
+
+  .cagr-val { font-family:'Syne',sans-serif; font-weight:700; font-size:13px; }
+  .cagr-pos { color:var(--pos); }
+  .cagr-neg { color:var(--neg); }
+  .cagr-nil { color:var(--muted); font-size:11px; }
+
+  .cagr-bar-wrap { display:flex; align-items:center; gap:8px; justify-content:flex-end; }
+  .cagr-pill { height:5px; border-radius:3px; min-width:3px; max-width:80px; flex-shrink:0; }
+  .cagr-pill.pos { background:var(--pos); }
+  .cagr-pill.neg { background:var(--neg); }
+
+  /* empty state */
+  .empty-state { text-align:center; padding:80px 0; color:var(--muted); }
+  .empty-icon  { font-size:42px; opacity:0.2; margin-bottom:14px; }
+  .empty-text  { font-size:13px; line-height:1.7; }
+
+  @media (max-width:800px) {
+    .sbl-header { grid-template-columns: 1fr auto; }
+    .sbl-col:not(:last-child) { display:none; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="header-left">
+      <div class="logo-mark">RF</div>
+      <div>
+        <h1>CAGR <span>Analysis</span></h1>
+      </div>
+    </div>
+    <a href="/" class="nav-link">← Forecast</a>
+  </header>
+
+  <!-- Controls -->
+  <div class="controls">
+    <div class="ctrl-group">
+      <label>Start Year</label>
+      <div class="year-wrap">
+        <select class="year-select" id="start-year" onchange="onYearChange()"></select>
+      </div>
+    </div>
+
+    <div class="arrow-sep">→</div>
+
+    <div class="ctrl-group">
+      <label>End Year</label>
+      <div class="year-wrap" id="end-year-wrap">
+        <div class="year-badge" id="end-year-badge">Forecast</div>
+        <select class="year-select" id="end-year" onchange="onYearChange()"></select>
+      </div>
+    </div>
+
+    <button class="btn" id="run-btn" onclick="runCagr()">
+      <span class="btn-text">Compute CAGR</span>
+      <div class="spinner"></div>
+    </button>
+
+    <div class="forecast-notice" id="forecast-notice">
+      ◈ End year exceeds the dataset.<br/>
+      Revenue will be <strong>predicted by Model 1</strong> for all rep codes,<br/>
+      then aggregated by Domain and Sub-Business Line.
+    </div>
+
+    <div class="error-msg" id="error-msg"></div>
+  </div>
+
+  <!-- KPI Summary -->
+  <div class="summary-bar" id="summary-bar">
+    <div class="kpi-card">
+      <div class="kpi-label">Period</div>
+      <div class="kpi-value" id="kpi-period">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Revenue <span class="badge real">Actual</span></div>
+      <div class="kpi-value" id="kpi-rev-start">—</div>
+    </div>
+    <div class="kpi-card" id="kpi-end-card">
+      <div class="kpi-label" id="kpi-end-label">Revenue</div>
+      <div class="kpi-value" id="kpi-rev-end">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Avg CAGR (all SBLs)</div>
+      <div class="kpi-value" id="kpi-avg-cagr">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Sub-Business Lines</div>
+      <div class="kpi-value" id="kpi-sbl-count">—</div>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div class="results-area" id="results-area">
+    <div class="panel-title" id="results-title">Results by Sub-Business Line</div>
+    <div id="sbl-list"></div>
+  </div>
+
+  <!-- Empty state -->
+  <div class="empty-state" id="empty-state">
+    <div class="empty-icon">◈</div>
+    <div class="empty-text">Select a start and end year,<br/>then click Compute CAGR.</div>
+  </div>
+
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════════════
+let DATA_MIN_YEAR    = null;
+let DATA_MAX_YEAR    = null;
+let MAX_SELECT_YEAR  = null;
+
+// ══════════════════════════════════════════════════════════
+//  FORMAT
+// ══════════════════════════════════════════════════════════
+function fmtRev(v) {
+  if (v == null || !isFinite(v)) return "—";
+  const abs = Math.abs(v), sign = v < 0 ? "-" : "";
+  if (abs >= 1e6) return sign + (abs / 1e6).toFixed(2) + "M";
+  if (abs >= 1e3) return sign + (abs / 1e3).toFixed(1) + "k";
+  return sign + abs.toFixed(0);
+}
+
+function fmtCagr(v) {
+  if (v == null) return null;
+  return (v >= 0 ? "+" : "") + v.toFixed(2) + "%";
+}
+
+// ══════════════════════════════════════════════════════════
+//  YEAR SELECT INIT & CHANGE HANDLER
+// ══════════════════════════════════════════════════════════
+async function initYears() {
+  try {
+    const res  = await fetch("/get_cagr_years");
+    const info = await res.json();
+    DATA_MIN_YEAR   = info.min_year;
+    DATA_MAX_YEAR   = info.max_year;
+    MAX_SELECT_YEAR = info.max_select_year;
+
+    const startSel = document.getElementById("start-year");
+    const endSel   = document.getElementById("end-year");
+
+    // Start year: dataset range only (can't start in the future)
+    for (let y = DATA_MIN_YEAR; y <= DATA_MAX_YEAR; y++) {
+      const o = new Option(y, y);
+      if (y === DATA_MIN_YEAR) o.selected = true;
+      startSel.appendChild(o);
+    }
+
+    // End year: dataset range PLUS extra forecast years
+    for (let y = DATA_MIN_YEAR + 1; y <= MAX_SELECT_YEAR; y++) {
+      const o   = new Option(
+        y > DATA_MAX_YEAR ? `${y}  ◈` : y,   // append marker for future years
+        y
+      );
+      if (y > DATA_MAX_YEAR) o.classList.add("forecast-opt");
+      if (y === DATA_MAX_YEAR) o.selected = true;
+      endSel.appendChild(o);
+    }
+
+    onYearChange();
+  } catch(e) {
+    showError("Could not load year range: " + e.message);
+  }
+}
+
+function isForecastYear(y) {
+  return DATA_MAX_YEAR !== null && parseInt(y) > DATA_MAX_YEAR;
+}
+
+function onYearChange() {
+  const endVal    = parseInt(document.getElementById("end-year").value);
+  const isForecast = isForecastYear(endVal);
+
+  const endSel    = document.getElementById("end-year");
+  const badge     = document.getElementById("end-year-badge");
+  const notice    = document.getElementById("forecast-notice");
+
+  // Style the end-year select purple when in forecast territory
+  endSel.classList.toggle("is-forecast", isForecast);
+  badge.style.display  = isForecast ? "block" : "none";
+  notice.classList.toggle("visible", isForecast);
+}
+
+// ══════════════════════════════════════════════════════════
+//  ERROR
+// ══════════════════════════════════════════════════════════
+function showError(msg) {
+  const el = document.getElementById("error-msg");
+  el.textContent = msg; el.style.display = "block";
+}
+function clearError() {
+  document.getElementById("error-msg").style.display = "none";
+}
+
+// ══════════════════════════════════════════════════════════
+//  RUN
+// ══════════════════════════════════════════════════════════
+async function runCagr() {
+  clearError();
+  const startYear = parseInt(document.getElementById("start-year").value);
+  const endYear   = parseInt(document.getElementById("end-year").value);
+  const btn       = document.getElementById("run-btn");
+
+  if (startYear >= endYear) { showError("Start year must be before end year."); return; }
+
+  btn.classList.add("loading"); btn.disabled = true;
+
+  try {
+    const res  = await fetch("/compute_cagr", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ start_year: startYear, end_year: endYear }),
+    });
+    const data = await res.json();
+    if (data.error) { showError(data.error); return; }
+    renderResults(data);
+  } catch(e) {
+    showError("Server error: " + e.message);
+  } finally {
+    btn.classList.remove("loading"); btn.disabled = false;
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+//  RENDER
+// ══════════════════════════════════════════════════════════
+function renderResults(data) {
+  document.getElementById("empty-state").style.display  = "none";
+  document.getElementById("summary-bar").style.display  = "grid";
+  document.getElementById("results-area").style.display = "block";
+
+  const sbls      = data.sub_business_lines;
+  const isPred    = data.end_year_predicted;
+
+  // — KPIs —
+  const totalStart = sbls.reduce((s,x) => s + x.total_start, 0);
+  const totalEnd   = sbls.reduce((s,x) => s + x.total_end,   0);
+  const validCagrs = sbls.filter(x => x.avg_cagr != null).map(x => x.avg_cagr);
+  const overallAvg = validCagrs.length ? validCagrs.reduce((a,b)=>a+b,0) / validCagrs.length : null;
+
+  document.getElementById("kpi-period").textContent    = `${data.start_year} → ${data.end_year}`;
+  document.getElementById("kpi-rev-start").textContent = fmtRev(totalStart);
+  document.getElementById("kpi-rev-end").textContent   = fmtRev(totalEnd);
+  document.getElementById("kpi-sbl-count").textContent = sbls.length;
+
+  // End-year KPI card — badge & colour change for predicted
+  const endCard  = document.getElementById("kpi-end-card");
+  const endLabel = document.getElementById("kpi-end-label");
+  const endVal   = document.getElementById("kpi-rev-end");
+  endLabel.innerHTML = `Revenue <span class="badge ${isPred ? "pred" : "real"}">${isPred ? "Predicted" : "Actual"}</span>`;
+  endCard.classList.toggle("forecast-card", isPred);
+  endVal.classList.toggle("forecast", isPred);
+
+  // Avg CAGR KPI
+  const cagrEl = document.getElementById("kpi-avg-cagr");
+  cagrEl.textContent = fmtCagr(overallAvg) ?? "—";
+  cagrEl.className   = "kpi-value" + (overallAvg == null ? "" : overallAvg >= 0 ? " cagr-pos" : " cagr-neg");
+
+  // Panel title
+  document.getElementById("results-title").textContent =
+    `Results by Sub-Business Line${isPred ? " (end year predicted by Model 1)" : ""}`;
+
+  // Max abs CAGR for pill sizing
+  const allCagrs   = sbls.flatMap(s => s.domains.map(d => d.cagr)).filter(v => v != null);
+  const maxAbsCagr = allCagrs.length ? Math.max(...allCagrs.map(Math.abs)) : 1;
+
+  // — SBL blocks —
+  const listEl = document.getElementById("sbl-list");
+  listEl.innerHTML = "";
+
+  sbls.forEach((sbl, idx) => {
+    const cagrStr = fmtCagr(sbl.avg_cagr);
+    const cagrCls = sbl.avg_cagr == null ? "cagr-nil" : sbl.avg_cagr >= 0 ? "cagr-pos" : "cagr-neg";
+
+    const domainRows = sbl.domains.map(d => {
+      const dc      = d.cagr == null ? "cagr-nil" : d.cagr >= 0 ? "cagr-pos" : "cagr-neg";
+      const pillPct = d.cagr != null ? Math.abs(d.cagr) / maxAbsCagr : 0;
+      const pillW   = Math.max(3, Math.round(pillPct * 80));
+      const pillCls = d.cagr == null ? "" : d.cagr >= 0 ? "pos" : "neg";
+      const endCls  = isPred ? "rev-val pred" : "rev-val";
+
+      const safeDomain = encodeURIComponent(d.name);
+      return `<tr onclick="drillToDomain('${safeDomain}', ${data.start_year}, ${data.end_year})" title="Open forecast for ${d.name}">
+        <td>
+          ${d.name}
+          <span class="domain-drill-hint">→ forecast</span>
+        </td>
+        <td class="rev-val">${fmtRev(d.revenue_start)}</td>
+        <td class="${endCls}">${fmtRev(d.revenue_end)}</td>
+        <td>
+          <div class="cagr-bar-wrap">
+            ${d.cagr != null
+              ? `<div class="cagr-pill ${pillCls}" style="width:${pillW}px"></div>
+                 <span class="cagr-val ${dc}">${fmtCagr(d.cagr)}</span>`
+              : `<span class="cagr-nil">n/a</span>`}
+          </div>
+        </td>
+      </tr>`;
+    }).join("");
+
+    const endRevCls = isPred ? "rev-val pred" : "rev-val";
+
+    const block = document.createElement("div");
+    block.className = "sbl-block";
+    block.id = `sbl-${idx}`;
+    block.innerHTML = `
+      <div class="sbl-header" onclick="toggleSbl(${idx})">
+        <div class="sbl-name">${sbl.name}</div>
+
+        <div class="sbl-col">
+          <div class="sbl-col-head">${data.start_year} Revenue</div>
+          <div class="rev-val">${fmtRev(sbl.total_start)}</div>
+        </div>
+
+        <div class="sbl-col">
+          <div class="sbl-col-head">
+            ${data.end_year} Revenue
+            ${isPred ? '<span class="badge pred">pred</span>' : ''}
+          </div>
+          <div class="${endRevCls}">${fmtRev(sbl.total_end)}</div>
+        </div>
+
+        <div class="sbl-col">
+          <div class="sbl-col-head">Avg CAGR</div>
+          <div class="cagr-val ${cagrCls}">${cagrStr ?? "n/a"}</div>
+        </div>
+
+        <div class="sbl-toggle">▾</div>
+      </div>
+
+      <div class="domain-table-wrap">
+        <table class="domain-table">
+          <thead>
+            <tr>
+              <th>Domain</th>
+              <th>${data.start_year}</th>
+              <th>${data.end_year}${isPred ? ' ◈' : ''}</th>
+              <th style="text-align:right">CAGR</th>
+            </tr>
+          </thead>
+          <tbody>${domainRows}</tbody>
+        </table>
+      </div>
+    `;
+    listEl.appendChild(block);
+  });
+}
+
+/*function drillToDomain(encodedDomain, startYear, endYear) {
+  const params = new URLSearchParams({
+    domain:     encodedDomain,
+    start_year: startYear,
+    end_year:   endYear,
+  });
+  window.location.href = "/?" + params.toString();
+}*/
+// In cagr.html
+function drillToDomain(domainName, startYear, endYear) {
+  const params = new URLSearchParams({
+    domain:     domainName,
+    start_year: startYear,
+    end_year:   endYear,
+  });
+  window.location.href = "/?" + params.toString();
+}
+function toggleSbl(idx) {
+  document.getElementById(`sbl-${idx}`).classList.toggle("open");
+}
+
+// ══════════════════════════════════════════════════════════
+//  BOOT
+// ══════════════════════════════════════════════════════════
+initYears();
+</script>
+</body>
+</html>
